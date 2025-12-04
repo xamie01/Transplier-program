@@ -1,0 +1,9 @@
+# Trading strategy dependencies
+freqtrade>=2023.11
+TA-Lib>=0.4.28
+pandas-ta>=0.3.14b0
+pandas>=1.5.0
+
+# For testing
+pytest>=7.0
+jsonschema>=4.0

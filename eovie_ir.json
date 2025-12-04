@@ -1,0 +1,78 @@
+{
+  "meta": {
+    "name": "EOVIE RSI/SMA Crossover",
+    "author": "Original Author",
+    "timeframe": "5m"
+  },
+  "indicators": [
+    {
+      "id": "ind_0",
+      "type": "SMA",
+      "params": {
+        "timeperiod": 15
+      },
+      "source": "dataframe"
+    },
+    {
+      "id": "ind_1",
+      "type": "RSI",
+      "params": {
+        "timeperiod": 14
+      },
+      "source": "dataframe"
+    },
+    {
+      "id": "ind_2",
+      "type": "RSI",
+      "params": {
+        "timeperiod": 4
+      },
+      "source": "dataframe"
+    },
+    {
+      "id": "ind_3",
+      "type": "RSI",
+      "params": {
+        "timeperiod": 20
+      },
+      "source": "dataframe"
+    }
+  ],
+  "conditions": {
+    "entry_long": [
+      {
+        "expr": "(dataframe['rsi_slow'] < dataframe['rsi_slow'].shift(1)) & (dataframe['rsi_fast'] < 45) & (dataframe['rsi'] > 35) & (dataframe['close'] < dataframe['sma_15'] * 0.961) & (dataframe['cti'] < -0.58)"
+      }
+    ],
+    "exit_long": [
+      {
+        "expr": "dataframe['fastk'] > 75"
+      }
+    ],
+    "entry_short": [],
+    "exit_short": []
+  },
+  "orders": [
+    {
+      "type": "market",
+      "side": "long",
+      "size": "pct:10",
+      "reduce_only": false,
+      "size_parsed": {
+        "mode": "percent",
+        "value": 10.0
+      }
+    }
+  ],
+  "position_sizing": {
+    "mode": "percent",
+    "value": 10.0
+  },
+  "timeframes": [
+    "5m"
+  ],
+  "metadata": {
+    "version": "0.1",
+    "source": "python_parser"
+  }
+}

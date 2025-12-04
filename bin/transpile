@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""CLI for transpiling trading strategies between languages."""
+import argparse
+import sys
+from pathlib import Path
+
+
+def _bootstrap_path():
+    """Allow importing `src` by adding workspace root to sys.path."""
+    return str(Path(__file__).parents[1])
+
+
+def main():
+    sys.path.insert(0, _bootstrap_path())
+    
+    from src.parsers import get_parser, get_parser_for_file
+    from src.generators import get_generator
+    from src.ir.normalize import normalize_ir, ir_equivalent
+    
+    parser = argparse.ArgumentParser(description='Transpile trading strategies between languages.')
+    parser.add_argument('input', help='Source file (.py or .pine) or - for stdin')
+    parser.add_argument('-o', '--output', help='Output file (defaults to stdout)')
+    parser.add_argument('-t', '--target', default='python', help='Target language (python, pine)')
+    parser.add_argument('--check-equivalence', action='store_true', 
+                        help='After generation, parse back and verify equivalence')
+    parser.add_argument('--normalize-only', action='store_true',
+                        help='Only normalize IR and output as JSON')
+    parser.add_argument('--with-ai', action='store_true', help='Use AI translator to translate conditions for target language')
+    parser.add_argument('--input-lang', help='Override input language detection')
+    
+    args = parser.parse_args()
+    
+    try:
+        # Read input
+        if args.input == '-':
+            code = sys.stdin.read()
+            input_lang = args.input_lang or 'python'
+        else:
+            code = Path(args.input).read_text()
+            if args.input_lang:
+                input_lang = args.input_lang
+            else:
+                # Detect from extension
+                input_parser = get_parser_for_file(args.input)
+                input_lang = 'python' if '.py' in args.input else 'pine'
+        
+        # Parse
+        parser_mod = get_parser(input_lang)
+        ir = parser_mod.parse(code)
+        
+        # Normalize
+        ir_normalized = normalize_ir(ir)
+        
+        # Prepare normalized IR JSON (for export or normalize-only mode)
+        import json
+        ir_json = json.dumps(ir_normalized, indent=2)
+        if args.normalize_only:
+            output = ir_json
+        else:
+            # Generate target code
+            # Optionally run AI translation to produce translated conditions
+            translated_ir = None
+            if args.with_ai:
+                try:
+                    from src.ai.translator import get_default_translator
+                    translator = get_default_translator()
+                    translated_ir = translator.translate_ir_conditions(ir_normalized, args.target)
+                    # If translator produced translated expressions, prefer them for code generation
+                except Exception as e:
+                    print(f"Warning: AI translator unavailable: {e}", file=sys.stderr)
+
+            gen_input_ir = translated_ir if translated_ir is not None else ir_normalized
+            gen_mod = get_generator(args.target)
+            output = gen_mod.generate(gen_input_ir)
+
+            # Optionally check equivalence
+            if args.check_equivalence and args.target != input_lang:
+                # Parse generated code back
+                try:
+                    gen_parser = get_parser(args.target)
+                    ir_roundtrip = gen_parser.parse(output)
+                    ir_roundtrip_norm = normalize_ir(ir_roundtrip)
+
+                    # Compare against the canonical (non-translated) normalized IR to ensure core semantics
+                    compare_ir = ir_normalized
+                    if args.with_ai and translated_ir is not None:
+                        # If AI was used, allow the translator to provide a version for comparison
+                        compare_ir = translated_ir
+
+                    if ir_equivalent(compare_ir, ir_roundtrip_norm):
+                        print("✓ Round-trip equivalence check passed", file=sys.stderr)
+                    else:
+                        print("✗ Warning: Round-trip equivalence check failed", file=sys.stderr)
+                except Exception as e:
+                    print(f"✗ Could not verify equivalence: {e}", file=sys.stderr)
+        
+        # Export normalized IR alongside generated output for downstream tooling
+        try:
+            if args.output:
+                # Write main output
+                Path(args.output).write_text(output)
+                print(f"✓ Wrote {args.target} output to {args.output}", file=sys.stderr)
+                # Write IR JSON next to output file: <stem>.ir.json
+                out_path = Path(args.output)
+                ir_out = out_path.with_name(out_path.stem + '.ir.json')
+                ir_out.write_text(ir_json)
+                print(f"✓ Exported normalized IR to {ir_out}", file=sys.stderr)
+            else:
+                # No output file specified: print main output to stdout and still export IR to <input_stem>.ir.json
+                print(output)
+                in_path = Path(args.input) if args.input != '-' else Path('stdin')
+                ir_out = Path(in_path.stem + '.ir.json')
+                ir_out.write_text(ir_json)
+                print(f"✓ Exported normalized IR to {ir_out}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: could not write exported IR: {e}", file=sys.stderr)
+    
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

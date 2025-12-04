@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "name": "SMA Crossover Example",
+    "author": "Example",
+    "timeframe": "1h",
+    "description": "Simple moving average crossover strategy"
+  },
+  "indicators": [
+    {
+      "id": "sma_fast",
+      "type": "SMA",
+      "params": {
+        "period": 20
+      },
+      "source": "close"
+    },
+    {
+      "id": "sma_slow",
+      "type": "SMA",
+      "params": {
+        "period": 50
+      },
+      "source": "close"
+    }
+  ],
+  "conditions": {
+    "entry_long": [
+      {
+        "expr": "ta.crossover(sma_fast, sma_slow)"
+      }
+    ],
+    "exit_long": [
+      {
+        "expr": "ta.crossunder(sma_fast, sma_slow)"
+      }
+    ],
+    "entry_short": [],
+    "exit_short": []
+  },
+  "orders": [
+    {
+      "type": "market",
+      "side": "long",
+      "size": "pct:10",
+      "reduce_only": false
+    }
+  ],
+  "position_sizing": {
+    "mode": "percent",
+    "value": 10
+  },
+  "timeframes": [
+    "1h"
+  ],
+  "metadata": {
+    "version": "0.1",
+    "tags": [
+      "sma",
+      "crossover",
+      "example"
+    ]
+  }
+}
