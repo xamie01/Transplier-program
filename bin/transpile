@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Simple CLI wrapper for prototype transpiler."""
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,6 +9,26 @@ from pathlib import Path
 def _bootstrap_path():
     # Allow importing `src` by adding workspace root to sys.path
     return str(Path(__file__).parents[1])
+
+
+def _check_git_status():
+    """Check if there are uncommitted changes in the git repository.
+    
+    Returns:
+        bool: True if there are uncommitted changes, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            cwd=_bootstrap_path(),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return bool(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Not a git repo or git not available - proceed without checking
+        return False
 
 
 def main():
@@ -18,7 +39,15 @@ def main():
     p = argparse.ArgumentParser(description='Transpile strategies (prototype).')
     p.add_argument('input', help='Source file (Pine script) or - for stdin')
     p.add_argument('-o', '--output', help='Output file (defaults to stdout)')
+    p.add_argument('--force', action='store_true',
+                   help='Proceed even if there are uncommitted changes')
     args = p.parse_args()
+
+    # Check for uncommitted changes unless --force is specified
+    if not args.force and _check_git_status():
+        print("Warning: Uncommitted changes detected in the repository.", file=sys.stderr)
+        print("Commit your changes or use --force to proceed anyway.", file=sys.stderr)
+        sys.exit(1)
 
     if args.input == '-':
         code = sys.stdin.read()
