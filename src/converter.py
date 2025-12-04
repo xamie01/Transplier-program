@@ -51,11 +51,14 @@ class Converter:
             ConverterError: If conversion fails
         """
         try:
-            # Check if source is a file path
-            source_path = Path(source)
-            if source_path.exists() and source_path.is_file():
-                with open(source, 'r', encoding='utf-8') as f:
-                    source_code = f.read()
+            # Check if source is a file path (must not contain newlines and be reasonably short)
+            if '\n' not in source and len(source) < 500:
+                source_path = Path(source)
+                if source_path.exists() and source_path.is_file():
+                    with open(source, 'r', encoding='utf-8') as f:
+                        source_code = f.read()
+                else:
+                    source_code = source
             else:
                 source_code = source
             
@@ -122,11 +125,14 @@ class Converter:
             ConverterError: If conversion fails
         """
         try:
-            # Check if source is a file
-            source_path = Path(source)
-            if source_path.exists() and source_path.is_file():
-                with open(source, 'r', encoding='utf-8') as f:
-                    source_code = f.read()
+            # Check if source is a file (must not contain newlines and be reasonably short)
+            if '\n' not in source and len(source) < 500:
+                source_path = Path(source)
+                if source_path.exists() and source_path.is_file():
+                    with open(source, 'r', encoding='utf-8') as f:
+                        source_code = f.read()
+                else:
+                    source_code = source
             else:
                 source_code = source
             
@@ -228,11 +234,14 @@ class Converter:
             ConverterError: If validation fails
         """
         try:
-            # Check if source is a file
-            source_path = Path(source)
-            if source_path.exists() and source_path.is_file():
-                with open(source, 'r', encoding='utf-8') as f:
-                    source_code = f.read()
+            # Check if source is a file (must not contain newlines and be reasonably short)
+            if '\n' not in source and len(source) < 500:
+                source_path = Path(source)
+                if source_path.exists() and source_path.is_file():
+                    with open(source, 'r', encoding='utf-8') as f:
+                        source_code = f.read()
+                else:
+                    source_code = source
             else:
                 source_code = source
             
