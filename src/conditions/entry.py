@@ -47,6 +47,10 @@ class EntryConditionChecker:
         """
         Evaluate a condition expression.
         
+        WARNING: This method uses eval() with restricted builtins for expression evaluation.
+        Only use with trusted input. Do not evaluate user-provided expressions without
+        proper validation.
+        
         Args:
             expression: Condition expression (e.g., "sma_20 > sma_50")
             data: Dictionary with indicator values
@@ -54,6 +58,10 @@ class EntryConditionChecker:
         Returns:
             True if condition is met, False otherwise
         """
+        # Validate the expression first
+        if not self.validate_condition(expression):
+            return False
+        
         try:
             # Replace indicator names with their values
             expr = expression
@@ -65,7 +73,8 @@ class EntryConditionChecker:
             # Handle special functions
             expr = self._handle_special_functions(expr, data)
             
-            # Evaluate the expression safely
+            # Evaluate the expression safely with restricted builtins
+            # Only basic math and comparison operations are allowed
             result = eval(expr, {"__builtins__": {}}, {})
             return bool(result)
         except Exception as e:
