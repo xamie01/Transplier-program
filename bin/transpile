@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Simple CLI wrapper for prototype transpiler."""
+import argparse
+import sys
+from pathlib import Path
+
+
+def _bootstrap_path():
+    # Allow importing `src` by adding workspace root to sys.path
+    return str(Path(__file__).parents[1])
+
+
+def main():
+    sys.path.insert(0, _bootstrap_path())
+    from src.parsers import pine
+    from src.generators import python as gen
+
+    p = argparse.ArgumentParser(description='Transpile strategies (prototype).')
+    p.add_argument('input', help='Source file (Pine script) or - for stdin')
+    p.add_argument('-o', '--output', help='Output file (defaults to stdout)')
+    args = p.parse_args()
+
+    if args.input == '-':
+        code = sys.stdin.read()
+    else:
+        code = open(args.input, 'r').read()
+
+    ir = pine.parse(code)
+    out = gen.generate(ir)
+
+    if args.output:
+        open(args.output, 'w').write(out)
+    else:
+        print(out)
+
+
+if __name__ == '__main__':
+    main()

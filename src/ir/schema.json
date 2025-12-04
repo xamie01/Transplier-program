@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "name": "SMA Crossover",
+    "author": "you",
+    "timeframe": "1h",
+    "notes": "IR draft for SMA crossover"
+  },
+  "indicators": [
+    {"id": "s1", "type": "SMA", "params": {"period": 20}, "source": "close"},
+    {"id": "s2", "type": "SMA", "params": {"period": 50}, "source": "close"}
+  ],
+  "conditions": {
+    "entry_long": [{"expr": "crossover(ind:s1,ind:s2)"}],
+    "exit_long": [{"expr": "crossunder(ind:s1,ind:s2)"}]
+  },
+  "orders": [{"type": "market", "side": "long", "size": "pct:10", "reduce_only": false}],
+  "position_sizing": {"mode": "percent", "value": 10},
+  "timeframes": ["1h"],
+  "metadata": {"version": "0.1", "tags": ["sma","demo"]}
+}
