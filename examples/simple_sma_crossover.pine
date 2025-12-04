@@ -1,0 +1,48 @@
+// Simple SMA Crossover Strategy - Pine Script Implementation
+// This is a basic trend-following strategy that uses two Simple Moving Averages
+// Entry: When fast SMA crosses above slow SMA (bullish signal)
+// Exit: When fast SMA crosses below slow SMA (bearish signal)
+
+//@version=5
+strategy("SMA Crossover", 
+         overlay=true,
+         default_qty_type=strategy.fixed,
+         default_qty_value=1)
+
+// Input parameters
+sma_fast_length = input.int(20, title="Fast SMA Length", minval=1)
+sma_slow_length = input.int(50, title="Slow SMA Length", minval=1)
+stop_loss_pct = input.float(2.0, title="Stop Loss %", minval=0.1)
+take_profit_pct = input.float(4.0, title="Take Profit %", minval=0.1)
+
+// Calculate indicators
+sma_20 = ta.sma(close, sma_fast_length)
+sma_50 = ta.sma(close, sma_slow_length)
+
+// Plot indicators
+plot(sma_20, title="SMA 20", color=color.blue, linewidth=2)
+plot(sma_50, title="SMA 50", color=color.red, linewidth=2)
+
+// Define conditions
+longCondition = ta.crossover(sma_20, sma_50)
+exitCondition = ta.crossunder(sma_20, sma_50)
+
+// Execute trades
+if longCondition
+    strategy.entry("Long", strategy.long)
+    // Set stop loss and take profit
+    stop_price = strategy.position_avg_price * (1 - stop_loss_pct / 100)
+    profit_price = strategy.position_avg_price * (1 + take_profit_pct / 100)
+    strategy.exit("Exit Long", "Long", stop=stop_price, limit=profit_price)
+
+if exitCondition
+    strategy.close_all()
+
+// Plot entry/exit signals
+plotshape(longCondition, title="Buy Signal", location=location.belowbar, 
+          color=color.green, style=shape.triangleup, size=size.small)
+plotshape(exitCondition, title="Sell Signal", location=location.abovebar, 
+          color=color.red, style=shape.triangledown, size=size.small)
+
+// Add background color for trend
+bgcolor(sma_20 > sma_50 ? color.new(color.green, 90) : color.new(color.red, 90))
