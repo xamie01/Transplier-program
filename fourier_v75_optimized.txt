@@ -1,0 +1,246 @@
+//@version=6
+strategy("Fourier V75 Multi-Harmonic Strategy", overlay=true, commission_type=strategy.commission.percent, commission_value=0.1)
+
+// ============================================================================
+// INPUTS - Optimized for Volatility 75 Index
+// ============================================================================
+lookback = input.int(60, "Lookback Period", minval=20, maxval=200, tooltip="Historical window for cycle detection. V75 typically has 20-40 bar cycles. Lower = faster initial trades")
+forecast = input.int(15, "Forecast Bars", minval=5, maxval=50, tooltip="How far ahead to predict")
+smooth_period = input.int(5, "Smoothing Period", minval=3, maxval=15, tooltip="Noise reduction. Lower for synthetics vs forex")
+use_multi_harmonic = input.bool(true, "Use Multi-Harmonic", tooltip="Combine 2 frequencies for better accuracy")
+
+// Risk Management
+stop_loss_atr = input.float(1.5, "Stop Loss ATR Multiple", minval=0.5, maxval=5.0, step=0.1)
+take_profit_atr = input.float(3.0, "Take Profit ATR Multiple", minval=0.5, maxval=10.0, step=0.1)
+atr_period = input.int(14, "ATR Period", minval=5, maxval=50)
+
+// Signal Filtering
+atr_multiplier = input.float(0.2, "Min Signal Strength (ATR)", minval=0.0, maxval=2.0, step=0.1, tooltip="Lower = more trades. Try 0.1-0.2 for V75")
+use_regime_filter = input.bool(false, "Use Regime Filter", tooltip="Disable for synthetics - they're always 'ranging'")
+max_trade_bars = input.int(50, "Max Bars in Trade", minval=10, maxval=200, tooltip="Force exit after X bars")
+
+// ============================================================================
+// SMOOTHING FUNCTION
+// ============================================================================
+smooth_price(src, len) =>
+    var float sum = 0.0
+    var float weight_sum = 0.0
+    for i = 0 to len - 1
+        weight = len - i
+        sum += src[i] * weight
+        weight_sum += weight
+    sum / weight_sum
+
+// ============================================================================
+// ARRAY MANAGEMENT
+// ============================================================================
+var float[] price_array = array.new_float(0)
+smoothed = smooth_price(close, smooth_period)
+
+if array.size(price_array) < lookback
+    array.push(price_array, smoothed)
+else
+    array.shift(price_array)
+    array.push(price_array, smoothed)
+
+// ============================================================================
+// PERIOD DETECTION - Enhanced for multiple frequencies
+// ============================================================================
+find_dominant_periods(src) =>
+    var float period1 = na
+    var float period2 = na
+    
+    if array.size(src) < 10
+        [na, na]
+    else
+        // Find primary period (max to min distance)
+        max_price = array.max(src)
+        min_price = array.min(src)
+        max_idx = 0
+        min_idx = 0
+        
+        for i = 0 to array.size(src) - 1
+            if array.get(src, i) == max_price
+                max_idx := i
+            if array.get(src, i) == min_price
+                min_idx := i
+        
+        period1 := math.abs(max_idx - min_idx) * 2  // Full cycle = up + down
+        period1 := period1 > 4 ? period1 : array.size(src) / 3
+        
+        // Find secondary period (half or double of primary)
+        // This captures harmonics common in synthetic indices
+        period2 := period1 / 2
+        
+        [period1, period2]
+
+// ============================================================================
+// MULTI-HARMONIC FOURIER PREDICTION
+// ============================================================================
+var float predicted_price = na
+var float predicted_single = na
+var float predicted_multi = na
+
+if array.size(price_array) >= lookback
+    [period1, period2] = find_dominant_periods(price_array)
+    
+    amplitude = (array.max(price_array) - array.min(price_array)) / 2
+    midpoint = (array.max(price_array) + array.min(price_array)) / 2
+    last_price = array.get(price_array, array.size(price_array) - 1)
+    
+    // Calculate phase using atan2 for proper quadrant detection
+    y_component = last_price - midpoint
+    x_component = amplitude
+    phase_offset = amplitude == 0 ? 0 : math.atan2(y_component, x_component)
+    
+    // Single harmonic prediction
+    frequency1 = 1.0 / period1
+    predicted_single := midpoint + amplitude * math.cos(2 * math.pi * frequency1 * forecast + phase_offset)
+    
+    // Multi-harmonic prediction (combine two frequencies)
+    if use_multi_harmonic and not na(period2)
+        frequency2 = 1.0 / period2
+        amplitude2 = amplitude * 0.4  // Secondary harmonic has lower amplitude
+        
+        wave1 = amplitude * math.cos(2 * math.pi * frequency1 * forecast + phase_offset)
+        wave2 = amplitude2 * math.cos(2 * math.pi * frequency2 * forecast + phase_offset * 0.5)
+        
+        predicted_multi := midpoint + wave1 + wave2
+        predicted_price := predicted_multi
+    else
+        predicted_price := predicted_single
+
+// ============================================================================
+// SIGNAL FILTERING
+// ============================================================================
+atr_val = ta.atr(atr_period)
+min_signal_strength = atr_val * atr_multiplier
+signal_strength = math.abs(close - predicted_price)
+
+// Regime detection (optional for synthetics)
+trend_strength = math.abs(ta.sma(close, 20) - ta.sma(close, 50))
+is_ranging = use_regime_filter ? trend_strength < atr_val * 3 : true
+
+// Check signal quality
+strong_signal = signal_strength > min_signal_strength
+valid_prediction = not na(predicted_price) and array.size(price_array) >= lookback
+
+// ============================================================================
+// POSITION TRACKING
+// ============================================================================
+var float entry_price = na
+var int bars_in_trade = 0
+
+if strategy.position_size > 0
+    bars_in_trade += 1
+else
+    bars_in_trade := 0
+
+// ============================================================================
+// TRADING LOGIC
+// ============================================================================
+// Entry conditions
+long_condition = close < predicted_price and strong_signal and is_ranging and valid_prediction and strategy.position_size == 0
+
+// Exit conditions
+price_crossed_prediction = close > predicted_price and strategy.position_size > 0
+max_duration_reached = bars_in_trade >= max_trade_bars and strategy.position_size > 0
+
+// Execute trades
+if long_condition
+    strategy.entry("Long", strategy.long)
+    entry_price := close
+    alert("Long Entry: Price=" + str.tostring(close) + " Predicted=" + str.tostring(predicted_price), alert.freq_once_per_bar_close)
+
+if price_crossed_prediction or max_duration_reached
+    strategy.close("Long", comment = max_duration_reached ? "Max Duration" : "Target")
+
+// Risk management exits
+if strategy.position_size > 0 and not na(entry_price)
+    stop_price = entry_price - atr_val * stop_loss_atr
+    limit_price = entry_price + atr_val * take_profit_atr
+    strategy.exit("Exit", "Long", stop=stop_price, limit=limit_price)
+
+// ============================================================================
+// PLOTTING
+// ============================================================================
+// Main plots
+plot(close, title="Close", color=color.new(color.blue, 0), linewidth=2)
+plot(smoothed, title="Smoothed", color=color.new(color.orange, 30), linewidth=1)
+
+// Predictions
+plot(predicted_price, title="Multi-Harmonic Prediction", color=color.new(color.green, 0), style=plot.style_cross, linewidth=3, offset=forecast)
+plot(predicted_single, title="Single Harmonic", color=color.new(color.purple, 50), style=plot.style_circles, linewidth=1, offset=forecast)
+
+// ATR Bands
+upper_band = close + atr_val
+lower_band = close - atr_val
+plot(upper_band, title="ATR Upper", color=color.new(color.gray, 70), style=plot.style_circles)
+plot(lower_band, title="ATR Lower", color=color.new(color.gray, 70), style=plot.style_circles)
+
+// Signal strength visualization
+signal_color = strong_signal ? color.new(color.green, 80) : color.new(color.red, 90)
+bgcolor(signal_color, title="Signal Strength")
+
+// Regime background (if enabled)
+regime_color = use_regime_filter and not is_ranging ? color.new(color.red, 95) : na
+bgcolor(regime_color, title="Trending Regime")
+
+// Entry/Exit markers
+plotshape(long_condition, title="Buy Signal", location=location.belowbar, color=color.new(color.green, 0), style=shape.triangleup, size=size.small)
+plotshape(price_crossed_prediction, title="Target Hit", location=location.abovebar, color=color.new(color.blue, 0), style=shape.triangledown, size=size.small)
+plotshape(max_duration_reached, title="Max Duration", location=location.abovebar, color=color.new(color.orange, 0), style=shape.xcross, size=size.tiny)
+
+// Risk management levels (when in position)
+plot(strategy.position_size > 0 and not na(entry_price) ? entry_price + atr_val * take_profit_atr : na, 
+     title="Take Profit Level", color=color.new(color.green, 0), style=plot.style_stepline, linewidth=1)
+plot(strategy.position_size > 0 and not na(entry_price) ? entry_price - atr_val * stop_loss_atr : na, 
+     title="Stop Loss Level", color=color.new(color.red, 0), style=plot.style_stepline, linewidth=1)
+plot(strategy.position_size > 0 ? entry_price : na, 
+     title="Entry Price", color=color.new(color.yellow, 0), style=plot.style_stepline, linewidth=2)
+
+// ============================================================================
+// DEBUG STATUS TABLE
+// ============================================================================
+var table debug_table = table.new(position.top_right, 2, 6, border_width=1)
+if barstate.islast
+    table.cell(debug_table, 0, 0, "Status", bgcolor=color.new(color.gray, 50), text_color=color.white)
+    table.cell(debug_table, 1, 0, "Value", bgcolor=color.new(color.gray, 50), text_color=color.white)
+    
+    table.cell(debug_table, 0, 1, "Bars Loaded", text_color=color.white)
+    table.cell(debug_table, 1, 1, str.tostring(array.size(price_array)), 
+         bgcolor=array.size(price_array) >= lookback ? color.new(color.green, 70) : color.new(color.red, 70), text_color=color.white)
+    
+    table.cell(debug_table, 0, 2, "Signal Strength", text_color=color.white)
+    table.cell(debug_table, 1, 2, str.tostring(signal_strength / atr_val, "#.##") + "x ATR",
+         bgcolor=strong_signal ? color.new(color.green, 70) : color.new(color.red, 70), text_color=color.white)
+    
+    table.cell(debug_table, 0, 3, "Close vs Pred", text_color=color.white)
+    table.cell(debug_table, 1, 3, close < predicted_price ? "Below ✓" : "Above ✗",
+         bgcolor=close < predicted_price ? color.new(color.green, 70) : color.new(color.orange, 70), text_color=color.white)
+    
+    table.cell(debug_table, 0, 4, "Position", text_color=color.white)
+    table.cell(debug_table, 1, 4, strategy.position_size > 0 ? "LONG" : "Flat",
+         bgcolor=strategy.position_size > 0 ? color.new(color.green, 50) : color.new(color.gray, 70), text_color=color.white)
+    
+    table.cell(debug_table, 0, 5, "Can Trade?", text_color=color.white)
+    table.cell(debug_table, 1, 5, valid_prediction and strong_signal and is_ranging ? "YES" : "NO",
+         bgcolor=valid_prediction and strong_signal and is_ranging ? color.new(color.green, 50) : color.new(color.red, 70), text_color=color.white)
+
+// ============================================================================
+// PERFORMANCE LABELS (Optional - comment out if too cluttered)
+// ============================================================================
+if barstate.islast and strategy.closedtrades > 0
+    win_rate = strategy.wintrades / strategy.closedtrades * 100
+    avg_win = strategy.grossprofit / strategy.wintrades
+    avg_loss = strategy.grossloss / strategy.losstrades
+    profit_factor = strategy.grossprofit / strategy.grossloss
+    
+    label.new(bar_index, high, 
+         text="Win: " + str.tostring(win_rate, "#.#") + "%\n" +
+              "PF: " + str.tostring(profit_factor, "#.##") + "\n" +
+              "Trades: " + str.tostring(strategy.closedtrades),
+         style=label.style_label_down,
+         color=profit_factor > 1.5 ? color.new(color.green, 20) : color.new(color.red, 20),
+         textcolor=color.white,
+         size=size.small)
