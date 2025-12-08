@@ -7,6 +7,8 @@ forecast = input.int(10, "Forecast Bars", minval=1, maxval=50)
 smooth_period = input.int(11, "Smoothing Period", minval=3, maxval=20)
 stop_loss = input.float(1.0, "Stop Loss %", minval=0.1, maxval=5.0, step=0.1)
 take_profit = input.float(2.0, "Take Profit %", minval=0.1, maxval=10.0, step=0.1)
+atr_period = input.int(14, "ATR Period", minval=5, maxval=50)
+atr_multiplier = input.float(0.5, "ATR Signal Threshold", minval=0.1, maxval=3.0, step=0.1)
 
 // Smoothing function
 smooth_price(src, len) =>
@@ -21,9 +23,7 @@ smooth_price(src, len) =>
 // Initialize and populate array incrementally
 var float[] price_array = array.new_float(0)
 smoothed = smooth_price(close, smooth_period)
-if bar_index == 0
-    array.push(price_array, smoothed)
-else if array.size(price_array) < lookback
+if array.size(price_array) < lookback
     array.push(price_array, smoothed)
 else
     array.shift(price_array)
@@ -53,27 +53,55 @@ if array.size(price_array) >= lookback
     amplitude = (array.max(price_array) - array.min(price_array)) / 2
     midpoint = (array.max(price_array) + array.min(price_array)) / 2
     last_price = array.get(price_array, array.size(price_array) - 1)
-    cos_input = amplitude == 0 ? 0 : math.min(math.max((last_price - midpoint) / amplitude, -1.0), 1.0)
-    phase_offset = math.acos(cos_input)
-    if last_price < midpoint
-        phase_offset := -phase_offset
+    
+    // Fix phase calculation using atan2 for proper quadrant detection
+    y_component = last_price - midpoint
+    x_component = amplitude
+    phase_offset = amplitude == 0 ? 0 : math.atan2(y_component, x_component)
+    
     frequency = 1.0 / dominant_period
     predicted_price := midpoint + amplitude * math.cos(2 * math.pi * frequency * forecast + phase_offset)
 
-// Trading logic
+// ATR-based signal filter and regime detection
+atr_val = ta.atr(atr_period)
+min_signal_strength = atr_val * atr_multiplier
+signal_strength = math.abs(close - predicted_price)
+
+// Detect ranging vs trending market
+trend_strength = math.abs(ta.sma(close, 20) - ta.sma(close, 50))
+is_ranging = trend_strength < atr_val * 2
+
+// Track entry price for proper stop/limit calculation
+var float entry_price = na
+
+// Trading logic with filters
 if array.size(price_array) >= lookback and not na(predicted_price)
-    if close < predicted_price and strategy.position_size == 0
+    // Entry: only in ranging markets with strong enough signal
+    if close < predicted_price and signal_strength > min_signal_strength and is_ranging and strategy.position_size == 0
         strategy.entry("Long", strategy.long)
+        entry_price := close
+    
+    // Manual exit when price crosses above prediction
     if close > predicted_price and strategy.position_size > 0
         strategy.close("Long")
 
-// Stop-loss and take-profit
-strategy.exit("Exit", "Long", stop=close * (1 - stop_loss / 100), profit=close * (1 + take_profit / 100))
+// Stop-loss and take-profit based on entry price
+if strategy.position_size > 0 and not na(entry_price)
+    strategy.exit("Exit", "Long", 
+         stop=entry_price * (1 - stop_loss / 100), 
+         limit=entry_price * (1 + take_profit / 100))
 
 // Plotting
-plot(close, title="Close", color=color.blue)
-plot(smoothed, title="Smoothed", color=color.orange)
-plot(predicted_price, title="Predicted", color=color.green, style=plot.style_cross, offset=forecast)
+plot(close, title="Close", color=color.blue, linewidth=1)
+plot(smoothed, title="Smoothed", color=color.orange, linewidth=1)
+plot(predicted_price, title="Predicted", color=color.green, style=plot.style_cross, linewidth=2, offset=forecast)
+
+// Plot regime detection
+bgcolor(is_ranging ? color.new(color.green, 95) : color.new(color.red, 95), title="Regime")
+
+// Plot ATR bands for reference
+plot(close + atr_val, title="ATR Upper", color=color.gray, style=plot.style_circles, linewidth=1)
+plot(close - atr_val, title="ATR Lower", color=color.gray, style=plot.style_circles, linewidth=1)
 
 // Plot trade signals
 plotshape(strategy.position_size > 0 and strategy.position_size[1] <= 0, title="Buy", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.tiny)
