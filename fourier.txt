@@ -1,0 +1,80 @@
+//@version=6
+strategy("Fourier-Inspired Forex Strategy", overlay=true)
+
+// Inputs
+lookback = input.int(50, "Lookback Period", minval=10, maxval=200)
+forecast = input.int(10, "Forecast Bars", minval=1, maxval=50)
+smooth_period = input.int(11, "Smoothing Period", minval=3, maxval=20)
+stop_loss = input.float(1.0, "Stop Loss %", minval=0.1, maxval=5.0, step=0.1)
+take_profit = input.float(2.0, "Take Profit %", minval=0.1, maxval=10.0, step=0.1)
+
+// Smoothing function
+smooth_price(src, len) =>
+    var float sum = 0.0
+    var float weight_sum = 0.0
+    for i = 0 to len - 1
+        weight = len - i
+        sum += src[i] * weight
+        weight_sum += weight
+    sum / weight_sum
+
+// Initialize and populate array incrementally
+var float[] price_array = array.new_float(0)
+smoothed = smooth_price(close, smooth_period)
+if bar_index == 0
+    array.push(price_array, smoothed)
+else if array.size(price_array) < lookback
+    array.push(price_array, smoothed)
+else
+    array.shift(price_array)
+    array.push(price_array, smoothed)
+
+// Period detection function
+find_period(src) =>
+    if array.size(src) < 2
+        na
+    else
+        max_price = array.max(src)
+        min_price = array.min(src)
+        max_idx = 0
+        min_idx = 0
+        for i = 0 to array.size(src) - 1
+            if array.get(src, i) == max_price
+                max_idx := i
+            if array.get(src, i) == min_price
+                min_idx := i
+        period = math.abs(max_idx - min_idx)
+        period > 1 ? period : array.size(src) / 2
+
+// Calculate predicted price
+var float predicted_price = na
+if array.size(price_array) >= lookback
+    dominant_period = find_period(price_array)
+    amplitude = (array.max(price_array) - array.min(price_array)) / 2
+    midpoint = (array.max(price_array) + array.min(price_array)) / 2
+    last_price = array.get(price_array, array.size(price_array) - 1)
+    cos_input = amplitude == 0 ? 0 : math.min(math.max((last_price - midpoint) / amplitude, -1.0), 1.0)
+    phase_offset = math.acos(cos_input)
+    if last_price < midpoint
+        phase_offset := -phase_offset
+    frequency = 1.0 / dominant_period
+    predicted_price := midpoint + amplitude * math.cos(2 * math.pi * frequency * forecast + phase_offset)
+
+// Trading logic
+if array.size(price_array) >= lookback and not na(predicted_price)
+    if close < predicted_price and strategy.position_size == 0
+        strategy.entry("Long", strategy.long)
+    if close > predicted_price and strategy.position_size > 0
+        strategy.close("Long")
+
+// Stop-loss and take-profit
+strategy.exit("Exit", "Long", stop=close * (1 - stop_loss / 100), profit=close * (1 + take_profit / 100))
+
+// Plotting
+plot(close, title="Close", color=color.blue)
+plot(smoothed, title="Smoothed", color=color.orange)
+plot(predicted_price, title="Predicted", color=color.green, style=plot.style_cross, offset=forecast)
+
+// Plot trade signals
+plotshape(strategy.position_size > 0 and strategy.position_size[1] <= 0, title="Buy", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.tiny)
+plotshape(strategy.position_size <= 0 and strategy.position_size[1] > 0, title="Sell", location=location.abovebar, color=color.red, style=shape.triangledown, size=size.tiny)
