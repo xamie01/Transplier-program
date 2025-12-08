@@ -57,7 +57,14 @@ if array.size(price_array) >= lookback
     // Fix phase calculation using atan2 for proper quadrant detection
     y_component = last_price - midpoint
     x_component = amplitude
-    phase_offset = amplitude == 0 ? 0 : math.atan2(y_component, x_component)
+    phase_offset = amplitude == 0 ? 0 : (
+     x_component > 0  ? math.atan(y_component / x_component) :
+     x_component < 0  ? math.atan(y_component / x_component) + math.pi :
+     y_component > 0  ?  math.pi / 2 :
+     y_component < 0  ? -math.pi / 2 :
+     0
+)
+
     
     frequency = 1.0 / dominant_period
     predicted_price := midpoint + amplitude * math.cos(2 * math.pi * frequency * forecast + phase_offset)
@@ -106,3 +113,4 @@ plot(close - atr_val, title="ATR Lower", color=color.gray, style=plot.style_circ
 // Plot trade signals
 plotshape(strategy.position_size > 0 and strategy.position_size[1] <= 0, title="Buy", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.tiny)
 plotshape(strategy.position_size <= 0 and strategy.position_size[1] > 0, title="Sell", location=location.abovebar, color=color.red, style=shape.triangledown, size=size.tiny)
+
