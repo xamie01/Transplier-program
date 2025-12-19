@@ -1,0 +1,39 @@
+# Deriv Trading Bot Configuration
+
+# Deriv API Settings
+deriv:
+  app_id: "1089"  # Default demo app ID
+  api_token: RKcFyq7sMsoA76s   # Set your API token here or via environment variable DERIV_API_TOKEN
+  
+# Trading Settings
+trading:
+  symbol: "R_75"  # Options: R_50, R_75, R_100, VOLATILITY_10_1S, VOLATILITY_25_1S, VOLATILITY_75_1S, etc.
+  stake_amount: 1.0  # USD per trade
+  candle_interval: 60  # seconds (60=1m, 120=2m, 300=5m, etc.)
+  # Throttle proposals to avoid API rate limits (seconds)
+  proposal_min_interval_sec: 1.5
+  
+# Strategy Selection
+strategy:
+  name: "FourierStrategy"  # Strategy class name
+  
+  # Strategy-specific parameters
+  params:
+    lookback: 50
+    forecast: 10
+    smooth_period: 11
+    stop_loss: 1.0  # percentage
+    take_profit: 2.0  # percentage
+    atr_period: 14
+    atr_multiplier: 0.5
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "trading.log"
+
+# Risk Management
+risk:
+  max_daily_trades: 50
+  max_daily_loss: 300.0  # USD
+  max_position_size: 30.0  # USD

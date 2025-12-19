@@ -1,0 +1,8 @@
+{
+  "expr_translated": "(rsi_slow < rsi_slow[1]) and (rsi_fast < 45) and (rsi > 35) and (close < sma_15 * 0.961) and (cti < -0.58)",
+  "confidence": 0.9,
+  "explain": "Mapped dataframe columns to indicator variables; converted '&' to 'and' and .shift(1) to [1].",
+  "cached": false,
+  "model": "mistralai/mistral-7b-instruct:free",
+  "ts": 1765726313
+}

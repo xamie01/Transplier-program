@@ -1,0 +1,129 @@
+<xml xmlns="http://www.w3.org/1999/xhtml" is_dbot="true" collection="false">
+  <variables>
+    <variable id="ind_0">ind_0</variable>
+    <variable id="ind_1">ind_1</variable>
+    <variable id="ind_2">ind_2</variable>
+    <variable id="ind_3">ind_3</variable>
+    </variables>
+  <block type="trade_definition" id="trade_def" x="0" y="0">
+    <statement name="TRADE_OPTIONS">
+      <block type="trade_definition_market">
+        <field name="MARKET_LIST">synthetic_index</field>
+        <field name="SUBMARKET_LIST">random_index</field>
+        <field name="SYMBOL_LIST">R_100</field>
+        <next>
+          <block type="trade_definition_tradetype">
+            <field name="TRADETYPECAT_LIST">callput</field>
+            <field name="TRADETYPE_LIST">callput</field>
+            <next>
+              <block type="trade_definition_contracttype">
+                <field name="TYPE_LIST">both</field>
+                <next>
+                  <block type="trade_definition_candleinterval">
+                    <field name="CANDLEINTERVAL_LIST">60</field>
+                    <next>
+                      <block type="trade_definition_restartonerror">
+                        <field name="RESTARTONERROR">TRUE</field>
+                        <next>
+                          <block type="trade_definition_trademark">
+                            <field name="TRADETYPECAT">stake</field>
+                            <field name="AMOUNT">1</field>
+                            <field name="CURRENCY">USD</field>
+                            <next>
+                              <block type="trade_definition_duration">
+                                <field name="DURATION">5</field>
+                                <field name="DURATIONTYPE">m</field>
+                                </block>
+                              </next>
+                            </block>
+                          </next>
+                        </block>
+                      </next>
+                    </block>
+                  </next>
+                </block>
+              </next>
+            </block>
+          </next>
+        </block>
+      </statement>
+    <statement name="BEFOREPURCHASE">
+      <block type="variables_set">
+        <field name="VAR">ind_0</field>
+        <value name="VALUE">
+          <block type="ta_sma">
+            <field name="TA_PERIOD">15</field>
+            <value name="INPUT_LIST">
+              <block type="ohlc">
+                <field name="OHLCFIELD_LIST">close</field>
+                </block>
+              </value>
+            </block>
+          </value>
+        <block type="variables_set">
+          <field name="VAR">ind_1</field>
+          <value name="VALUE">
+            <block type="ta_rsi">
+              <field name="TA_PERIOD">14</field>
+              <value name="INPUT_LIST">
+                <block type="ohlc">
+                  <field name="OHLCFIELD_LIST">close</field>
+                  </block>
+                </value>
+              </block>
+            </value>
+          <block type="variables_set">
+            <field name="VAR">ind_2</field>
+            <value name="VALUE">
+              <block type="ta_rsi">
+                <field name="TA_PERIOD">4</field>
+                <value name="INPUT_LIST">
+                  <block type="ohlc">
+                    <field name="OHLCFIELD_LIST">close</field>
+                    </block>
+                  </value>
+                </block>
+              </value>
+            <block type="variables_set">
+              <field name="VAR">ind_3</field>
+              <value name="VALUE">
+                <block type="ta_rsi">
+                  <field name="TA_PERIOD">20</field>
+                  <value name="INPUT_LIST">
+                    <block type="ohlc">
+                      <field name="OHLCFIELD_LIST">close</field>
+                      </block>
+                    </value>
+                  </block>
+                </value>
+              <next>
+                <block type="controls_if">
+                  <value name="IF0">
+                    <block type="logic_compare">
+                      <field name="OP">&gt;</field>
+                      <value name="A">
+                        <block type="variables_get">
+                          <field name="VAR">(rsi_slow &lt; rsi_slow[1]) and (rsi_fast &lt; 45) and (rsi</field>
+                          </block>
+                        </value>
+                      <value name="B">
+                        <block type="variables_get">
+                          <field name="VAR">35) and (close &lt; sma_15 * 0.961) and (cti &lt; -0.58)</field>
+                          </block>
+                        </value>
+                      </block>
+                    </value>
+                  <statement name="DO0">
+                    <block type="purchase">
+                      <field name="PURCHASE_LIST">CALL</field>
+                      </block>
+                    </statement>
+                  </block>
+                </next>
+              </block>
+            </block>
+          </block>
+        </block>
+      </statement>
+    </block>
+  </xml>

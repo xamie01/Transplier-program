@@ -1,0 +1,18 @@
+# Trading strategy dependencies
+freqtrade>=2023.11
+TA-Lib>=0.4.28
+pandas-ta>=0.3.14b0
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Transpiler dependencies
+pytest>=7.0
+<<<<<<< HEAD:requirements.txt
+jsonschema>=4.0
+=======
+jsonschema>=4.0
+
+# Deriv API Trading
+websockets>=11.0
+pyyaml>=6.0
+>>>>>>> c042cbe (new files):requirements_clean.txt

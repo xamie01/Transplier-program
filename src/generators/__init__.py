@@ -19,5 +19,8 @@ def get_generator(name: str) -> Any:
     elif name_lower in ['pine', 'pinescript']:
         from src.generators import pine
         return pine
+    elif name_lower in ['deriv', 'deriv-xml', 'dbot', 'derivxml']:
+        from src.generators import deriv_xml
+        return deriv_xml
     else:
         raise ValueError(f"Unknown generator: {name}")

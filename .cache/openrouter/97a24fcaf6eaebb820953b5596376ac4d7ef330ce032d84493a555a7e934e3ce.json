@@ -1,0 +1,8 @@
+{
+  "expr_translated": "fastk > 75",
+  "confidence": 0.95,
+  "explain": "Direct translation of column name and comparison operator.",
+  "cached": false,
+  "model": "mistralai/mistral-7b-instruct:free",
+  "ts": 1765726315
+}
