@@ -40,7 +40,7 @@ class FourierStrategy(TradingStrategy):
         self.atr_multiplier = self.params.get('atr_multiplier', 0.5)
         
         # Multi-timeframe (4h confirmation)
-        self.mtf_enabled = self.params.get('mtf_enabled', True)
+        self.mtf_enabled = self.params.get('mtf_enabled', False)
         self.mtf_predicted_price = None  # 4h prediction for trend confirmation
         
         # State

@@ -150,16 +150,22 @@ class Backtester:
         has_time_col = 'time' in df.columns
         time_is_numeric = has_time_col and pd.api.types.is_numeric_dtype(df['time'])
 
-        # Iterate through candles
+        # Iterate through candles with position counter
+        candle_idx = 0
         for idx, row in df.iterrows():
             # Support either numeric 'time' (epoch), string/TS 'time', or 'datetime'
             if has_time_col:
                 if time_is_numeric:
+                    # Skip rows with NaN time values
+                    if pd.isna(row['time']):
+                        continue
                     epoch = int(row['time'])
                 else:
                     epoch = int(pd.to_datetime(row['time']).timestamp())
             else:
                 dt = row['datetime']
+                if pd.isna(dt):
+                    continue
                 epoch = int(pd.to_datetime(dt).timestamp())
 
             candle = {
@@ -173,8 +179,8 @@ class Backtester:
             try:
                 # Optional HTF candle (4H close aligned to this row)
                 mtf_candle = None
-                if mtf_series is not None:
-                    mtf_close = mtf_series.iloc[idx]
+                if mtf_series is not None and candle_idx < len(mtf_series):
+                    mtf_close = mtf_series[candle_idx]
                     if pd.notna(mtf_close):
                         mtf_candle = {'close': float(mtf_close)}
 
@@ -198,8 +204,12 @@ class Backtester:
                 self.equity_curve.append(self.initial_balance + self.running_pnl)
                 self.timestamps.append(candle['epoch'])
                 
+                # Increment candle counter (after successful processing)
+                candle_idx += 1
+                
             except Exception as e:
                 logger.warning(f"Candle {idx} error: {e}")
+                candle_idx += 1
                 continue
         
         # Close any open trade at end

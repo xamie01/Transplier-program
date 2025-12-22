@@ -87,6 +87,23 @@ def run_monthly_backtest(
             logger.warning(f"  Skipping {month_str}: only {len(month_df)} candles (need >=200)")
             continue
         
+        # Prepare MTF (4h) resampled closes if enabled
+        mtf_series = None
+        if use_htf_filter:
+            # Resample 1h to 4h, then forward-fill to 1h for alignment
+            month_df_copy = month_df.copy()
+            month_df_copy['datetime'] = pd.to_datetime(month_df_copy['datetime'])
+            month_df_copy = month_df_copy.set_index('datetime')
+            
+            # Resample to 4h
+            mtf_resampled = month_df_copy['close'].resample('4H').last()
+            
+            # Forward-fill back to 1h alignment
+            mtf_aligned = mtf_resampled.reindex(month_df_copy.index, method='ffill')
+            
+            # Convert to list for positional indexing (parallel to month_df rows)
+            mtf_series = mtf_aligned.values
+        
         # Create strategy and backtester
         strategy = FourierStrategy(params={
             'lookback': lookback,
@@ -99,8 +116,8 @@ def run_monthly_backtest(
         })
         backtester = Backtester(strategy, initial_balance=initial_balance, stake_per_trade=stake)
         
-        # Run backtest
-        result = backtester.run(month_df)
+        # Run backtest with MTF series
+        result = backtester.run(month_df, mtf_series=mtf_series)
         
         # Calculate profit factor
         pnls = [t.pnl for t in result.trades if t.pnl is not None]
